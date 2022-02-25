@@ -1,0 +1,13 @@
+SELECT TradeCode, dtDate, CloseP
+    ,Round(AVG(CloseP) OVER (PARTITION BY TradeCode ORDER BY dtDate ROWS 19 PRECEDING),1) AS MA20
+    ,Round(AVG(CloseP) OVER (PARTITION BY TradeCode ORDER BY dtDate ROWS 19 PRECEDING)
+        + (STDEV(CloseP) OVER (PARTITION BY TradeCode ORDER BY dtDate ROWS 19 PRECEDING) * 2),1) AS UpperBollinger
+    , Round(AVG(CloseP) OVER (PARTITION BY TradeCode ORDER BY dtDate ROWS 19 PRECEDING)
+        - (STDEV(CloseP) OVER (PARTITION BY TradeCode ORDER BY dtDate ROWS 19 PRECEDING) * 2),1) AS LowerBollinger
+FROM tblTrade
+
+
+-- TradeCode : Ticker Name
+-- dtDate : Transaction Date
+-- CloseP : Close Price
+-- MA20 : 20 Days Simple Moving Average
