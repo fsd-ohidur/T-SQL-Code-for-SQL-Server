@@ -1,0 +1,69 @@
+select row_number() over (order by dtDate) row_number, TradeCode,dtDate,CloseP, 
+		round(isnull(CloseP - lag(CloseP,1) over (order by dtDate),0),5) change, 
+		round(isnull(gain,0),5) gain, round(isnull(abs(loss),0),5) loss, 
+		round(
+			case
+				when row_number <= 14 then null
+				when row_number = 15 then avg(round(isnull(gain,0),5)) over(order by dtDate rows between 13 preceding and current row) 
+			end, 5) avg_gain,
+		round(
+			case
+				when row_number <= 14 then null
+				when row_number = 15 then  avg(round(isnull(abs(loss),0),5)) over(order by dtDate rows between 13 preceding and current row) 
+			end,5 ) avg_loss,
+		cast(NULL as real) [relative strength (rs)],
+		cast(NULL as real) [rsi]
+	into #Temp_AGL
+	from
+	(
+		-- for gains and losses
+		select TradeCode, dtDate, row_number() over (order by dtDate) row_number, CloseP, CloseP-(lag(CloseP) over(order by dtDate)) change,
+		case when (CloseP-(lag(CloseP) over(order by dtDate))) > 0 then CloseP-(lag(CloseP) over(order by dtDate)) end gain,
+		case when (CloseP-(lag(CloseP) over(order by dtDate))) < 0 then CloseP-(lag(CloseP) over(order by dtDate)) end loss
+		from tblTrade
+		where TradeCode = 'ACTIVEFINE'
+	) for_avg_gain_loss_15Days
+
+	declare @date_cnt int = (select count(dtDate) from #Temp_AGL),
+		@row_number int = 15, @gain_prior money, @loss_prior money, @avg_gain_prior money,
+		@avg_loss_prior money, @gain_current money, @loss_current money, @avg_gain_current money, 
+		@avg_loss_current money, @rs_prior real, @rsi_prior real, @rs_current real, @rsi_current real
+
+	-- start looping through rows after 14th row until last row
+	-- process rows iteratively two at a time
+	while @row_number > 14 and @row_number <= (select count(dtDate) from #Temp_AGL)  
+	begin
+
+		-- assign values to local variables for prior and current rows
+		-- initially 15 denotes prior row and 16 denotes current row
+		-- pairs of rows are successively (15,16), (16,17), (17,18)...
+		select @gain_prior = isnull((select gain from #Temp_AGL where row_number = @row_number),0),
+			@loss_prior = abs(isnull((select loss from #Temp_AGL where row_number = @row_number),0)),
+			@avg_gain_prior = (select avg_gain from #Temp_AGL where row_number = @row_number),
+			@avg_loss_prior  = abs((select avg_loss from #Temp_AGL where row_number = @row_number)),
+			@gain_current = isnull((select gain from #Temp_AGL where row_number = @row_number + 1),0),
+			@loss_current = abs(isnull((select loss from #Temp_AGL where row_number = @row_number + 1),0)),
+			@avg_gain_current = (@avg_gain_prior*13 + @gain_current)/14,
+			@avg_loss_current = (@avg_loss_prior*13 + @loss_current)/14
+
+		-- update prior row
+		update #Temp_AGL
+		set [relative strength (rs)] = @avg_gain_prior/@avg_loss_prior,
+			rsi =  Round(case when @avg_loss_prior != 0 then (100 - (100/(1+(@avg_gain_prior/@avg_loss_prior)))) else 100 end,2)
+		where #Temp_AGL.row_number = @row_number
+
+		-- update current row
+		update #Temp_AGL
+		set avg_gain = ((@avg_gain_prior*13) + @gain_current)/14,
+			avg_loss = ((@avg_loss_prior*13) + @loss_current)/14,
+			[relative strength (rs)] = (((@avg_gain_prior*13) + @gain_current)/14)/(((@avg_loss_prior*13) + @loss_current)/14),
+			rsi = Round(case when @avg_loss_current != 0 then (100 - (100/(1+(@avg_gain_current/@avg_loss_current)))) else 100 end,2)
+		where #Temp_AGL.row_number = @row_number+1
+
+		-- increment @row_number by 1 to get to
+		-- next to rows to process for rsi
+		set @row_number = @row_number + 1
+	end
+
+	-- for comparison to RSI Code Unit Test tab
+	select * from #Temp_AGL order by dtDate
