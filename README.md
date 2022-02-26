@@ -1,7 +1,7 @@
 # Technical Analysis in SQL
 
-- Bolinger Band
-- RSI
+- Bolinger Band (BB)
+- Relative Strength Index (RSI)
 - Simple Moving Average (SMA)
 - Exponential Moving Average (EMA)
 
