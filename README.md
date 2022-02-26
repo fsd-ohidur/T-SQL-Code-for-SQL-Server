@@ -6,10 +6,10 @@
 - Exponential Moving Average (EMA)
 
 
-## Trade Date format
-select dtDate, TradeCode, LTP, High, Low, OpenP, CloseP, YCP, Trade, Value, Volume
-from tblTrade
-<br/>
+## Trade Data format
+select dtDate, TradeCode, LTP, High, Low, OpenP, CloseP, YCP, Trade, Value, Volume  
+from tblTrade  
+  
 ![image](https://raw.githubusercontent.com/fsd-ohidur/Technical-Analysis-In-SQL/main/tblTrade-Image.png)
 
 
