@@ -4,6 +4,7 @@
 - Relative Strength Index (RSI)
 - Simple Moving Average (SMA)
 - Exponential Moving Average (EMA)
+- Average True Range (ATR)
 
 
 ## Trade Data format
