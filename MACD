@@ -1,0 +1,79 @@
+--	Exec prcPrepareMACD 'DSSL'
+Alter Proc prcPrepareMACD @TradeCode varchar(15)
+as
+-- ewma_12 and ewma_26 for ticker TradeCode
+
+-- initially populate #temp_for_ewma for ewma calculations
+-- @ewma_first is the seed
+declare @ewma_first money = (select top 1 CloseP from tblTrade where TradeCode = @TradeCode order by dtDate)
+
+-- ewma seed run
+select dtDate, [TradeCode], CloseP, row_number() OVER (ORDER BY dtDate) [row_number], @ewma_first ewma_12, @ewma_first ewma_26
+into #temp_for_ewma
+from tblTrade
+where TradeCode = @TradeCode
+order by dtDate
+
+-- NULL ewma values for first period
+update #temp_for_ewma
+set ewma_12 = NULL, ewma_26 = NULL 
+where row_number = 1
+
+declare @max_row_number int = (select max(row_number) from #temp_for_ewma)
+declare @current_row_number int = 3
+declare @ew_12 real = 2.0/(12.0 + 1), @today_ewma_12 real
+declare @ew_26 real = 2.0/(26.0 + 1), @today_ewma_26 real
+
+while @current_row_number <= @max_row_number
+begin
+	set @today_ewma_12 =
+	(
+		-- compute ewma_12 for period 3
+		select top 1 (CloseP * @ew_12) + (lag(ewma_12,1) over (order by dtDate) * (1 - @ew_12)) ewma_12_today
+		from #temp_for_ewma
+		where row_number >=  @current_row_number -1 and row_number <=  @current_row_number
+		order by dtDate desc
+	)
+
+	set @today_ewma_26 =
+	(
+		-- compute ewma_26 for period 3
+		select top 1 (CloseP * @ew_26) + (lag(ewma_26,1) over (order by dtDate) * (1 - @ew_26)) ewma_26_today
+		from #temp_for_ewma
+		where row_number >=  @current_row_number - 1 and row_number <=  @current_row_number
+		order by dtDate desc
+	)
+	update #temp_for_ewma
+	set ewma_12 = Round(@today_ewma_12,2), ewma_26 = Round(@today_ewma_26,2)
+	where row_number =  @current_row_number
+
+	set @current_row_number =  @current_row_number + 1
+end
+
+-- nested queries for macd, signal, and macd_histogram
+select *, macd-signal macd_histogram
+into #for_sums_counts_by_macd
+from
+(
+	-- next, compute signal as ewma_9 of macd
+	select *, 
+		Round(case 
+			when row_number <= 2 then NULL 
+			when row_number = 3 then 0 
+			when row_number >3 then cast(((2/(9.0+1))*macd) + ((1-(2/(9.0+1)))*lag(macd,1) over (order by dtDate))as money) 
+		end,2) signal
+	from
+	(
+		-- first, compute macd as ewma_12 less ewma_26
+		select dtDate, TradeCode, CloseP, [row_number], [ewma_12], [ewma_26], [ewma_12]-[ewma_26] macd
+		from #temp_for_ewma
+		where row_number < = @max_row_number
+	) for_signal
+) for_macd_histogram
+order by dtDate
+
+-- display selected input and output values for macd indicators
+select * from #for_sums_counts_by_macd --where row_number <= 5
+
+Drop Table #temp_for_ewma
+Drop Table #for_sums_counts_by_macd
