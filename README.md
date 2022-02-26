@@ -1,4 +1,5 @@
-# T-SQL-Code-for-Technical-Analysis
+# Technical Analysis in SQL
 
 - Bolinger Band
 - RSI
+- Simple Moving Average
