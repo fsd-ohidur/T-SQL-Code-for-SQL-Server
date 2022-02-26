@@ -1,0 +1,14 @@
+SELECT dtDate, CloseP, 
+	Round(AVG(CloseP) OVER (PARTITION BY TradeCode ORDER BY dtDate ROWS 19 PRECEDING),1) AS SMA20,
+	Round(AVG(CloseP) OVER (PARTITION BY TradeCode ORDER BY dtDate ROWS 43 PRECEDING),1) AS SMA44,
+	Round(AVG(CloseP) OVER (PARTITION BY TradeCode ORDER BY dtDate ROWS 49 PRECEDING),1) AS SMA50,
+
+	Round(AVG(CloseP) OVER (PARTITION BY TradeCode ORDER BY dtDate ROWS 7 PRECEDING),1) AS SMA8,
+	Round(AVG(CloseP) OVER (PARTITION BY TradeCode ORDER BY dtDate ROWS 12 PRECEDING),1) AS SMA13,
+	Round(AVG(CloseP) OVER (PARTITION BY TradeCode ORDER BY dtDate ROWS 20 PRECEDING),1) AS SMA21
+
+FROM tblTrade
+Where TradeCode = 'ACTIVEFINE'
+
+--SMA20: 20 days moving average
+--SMA44: 44 days moving average
