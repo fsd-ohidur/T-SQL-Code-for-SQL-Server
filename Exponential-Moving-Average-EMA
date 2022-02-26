@@ -1,0 +1,66 @@
+-- Exec prcProcessEMA 'ACTIVEFINE', 10
+Alter procedure prcProcessEMA @TradeCode nvarchar(10), @period int
+as
+begin
+	set nocount on;
+	-- @alpha weight for current row time series value
+	Declare @alpha float = 2.0/(@period+1)
+ 
+	-- initially populate #Temp for ema calculations
+	-- @ema_first is the seed
+	Declare @ema_first money = (select top 1 CloseP from tblTrade where TradeCode = @TradeCode order by dtDate)
+ 
+	-- ema seed run to populate #Temp
+	-- all rows have first close price for ema 
+	select dtDate, [TradeCode], CloseP, row_number() OVER (ORDER BY dtDate) [row_number], @ema_first ema
+	into #Temp
+	from tblTrade
+	where TradeCode = @TradeCode
+	order by row_number
+ 
+	-- NULL ema values for first period
+	update #Temp
+	set ema = NULL
+	where row_number = 1
+ 
+	-- calculate ema for all dates in time series
+	-- @alpha is the exponential weight for the ema
+	-- start calculations with the 3rd period value
+	-- seed is close from 1st period; it is used as ema for 2nd period 
+ 
+	-- set @max_row_number int and initial @current_row_number
+	-- declare @today_ema
+	declare @max_row_number int = (select max(row_number) from #Temp)  
+	declare @current_row_number int = 3
+	declare @today_ema float
+ 
+	-- loop for computing successive ema values
+	while @current_row_number <= @max_row_number
+	begin
+		set @today_ema =
+		(
+			-- compute ema for @current_row_number
+			select top 1 (CloseP * @alpha) + (lag(ema,1) over (order by dtDate) * (1 - @alpha)) ema_today
+			from #Temp
+			where row_number >=  @current_row_number -1 and row_number <= @current_row_number
+			order by row_number desc
+		)
+ 
+		-- update current row in #Temp with @today_ema
+		-- and increment @current_row_number 
+		update #Temp
+		set ema = @today_ema
+		where row_number = @current_row_number
+ 
+		set @current_row_number = @current_row_number + 1
+	end
+ 
+	-- display the resultS set with the calculated values
+	-- on a daily basis
+	select dtDate, TradeCode, CloseP, @period [Period], Round(ema,1) EMA
+	from #Temp
+	where row_number < = @max_row_number
+	order by row_number
+ 
+	drop table #Temp
+end
