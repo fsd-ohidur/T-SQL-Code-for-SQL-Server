@@ -9,6 +9,7 @@
 ## Trade Date format
 select dtDate, TradeCode, LTP, High, Low, OpenP, CloseP, YCP, Trade, Value, Volume
 from tblTrade
+<br/>
 ![image](https://raw.githubusercontent.com/fsd-ohidur/Technical-Analysis-In-SQL/main/tblTrade-Image.png)
 
 
