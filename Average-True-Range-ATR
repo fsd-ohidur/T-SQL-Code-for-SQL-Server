@@ -1,0 +1,55 @@
+--	Exec prcPrepareATR 'ACTIVEFINE'
+Create proc prcPrepareATR @TradeCode varchar(15), @Period int=14
+as
+	Select dtDate, High, Low, CloseP, Isnull(lag(CloseP,1) Over (Order by dtDate),0) Prev_CloseP, 
+		ROW_NUMBER() Over(Order By dtDate) rowNumber,
+		Convert(money,0) HighLow, Convert(money,0) HighClose, Convert(money,0) CloseLow, Convert(money,0) TR, Convert(money,0) ATR--, Convert(money,0) Prev_ATR
+	Into #Temp
+	from tblTrade As A
+	Where TradeCode =@TradeCode
+	Order By dtDate
+
+	Update #Temp
+	Set HighLow = (High-Low), HighClose=Abs(High-Prev_CloseP), CloseLow=Abs(Prev_CloseP-Low) 
+	Where Prev_CloseP>0
+
+	Update A
+	Set TR = B.TR
+	from #Temp AS A
+	CROSS APPLY (
+		SELECT MAX(v) AS TR
+		FROM (VALUES (A.HighLow), (A.HighClose), (A.CloseLow)) AS value(v)
+	) AS B
+
+
+	Update A
+	Set ATR=B.TR1
+	From #Temp AS A
+	Cross Apply (
+		Select Round(Avg(TR), 4) TR1
+		From #Temp
+		Where rowNumber<=@Period
+	) AS B 
+	Where rowNumber=@Period
+
+	Declare @maxRow int=(Select max(RowNumber) from #Temp)
+	Declare @row int = @Period+1
+
+	While (@row<=@maxRow)
+	Begin
+		Update A
+		Set ATR=Round(ATR2, 4)
+		From #Temp AS A
+		Inner Join (
+			Select *, LAG(ATR,1) Over(Order by dtDate) ATR1, (LAG(ATR,1) Over(Order by dtDate)*13 + TR)/14 ATR2
+			From #Temp
+			Where rowNumber>=@Period
+		) AS B On A.dtDate = B.dtDate
+		Where A.rowNumber=@row
+	
+		Select @row=@row+1
+	End
+
+	Select * from #Temp
+
+	Drop table #Temp
